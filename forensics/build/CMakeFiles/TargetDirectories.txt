@@ -1,0 +1,3 @@
+/home/evaldt/PBN/Trabalho_Imagem/Trabalho_PBN/forensics/build/CMakeFiles/transmutator.dir
+/home/evaldt/PBN/Trabalho_Imagem/Trabalho_PBN/forensics/build/CMakeFiles/edit_cache.dir
+/home/evaldt/PBN/Trabalho_Imagem/Trabalho_PBN/forensics/build/CMakeFiles/rebuild_cache.dir
