@@ -62,10 +62,6 @@ int main(int argc, char *argv[])
     // Aplica o algoritmo em pin e gera a saida em pout
     // ...
     
-    // =====================================================
-    // Algoritmo de detecção de clones (Copy-Move Forgery)
-    // =====================================================
-
     const int BLOCK = 16;
     const int STEP = 8;
     const int MIN_DISTANCE = 48;
@@ -75,8 +71,7 @@ int main(int argc, char *argv[])
     const int MIN_EDGE_RATIO = 10;
     const int MATCH_THRESHOLD = 220;
 
-    typedef struct
-    {
+    typedef struct{
         int mean;
         int stddev;
         int edge_mean;
@@ -423,7 +418,7 @@ int main(int argc, char *argv[])
         int x2 = (j % grid_x) * STEP;
         int y2 = (j / grid_x) * STEP;
 
-        // Evita as linhas horizontais espurias que ainda aparecem em faixas repetidas
+        // Evita as linhas horizontais que ainda aparecem em faixas repetidas
         if (abs(y2 - y1) < STEP)
         {
             continue;
