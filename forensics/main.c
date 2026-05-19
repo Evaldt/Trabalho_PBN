@@ -71,24 +71,19 @@ int main(int argc, char *argv[])
     const int MIN_EDGE_RATIO = 10;
     const int MATCH_THRESHOLD = 220;
 
-    typedef struct{
-        int mean;
-        int stddev;
-        int edge_mean;
-        int edge_ratio;
-        unsigned char texture[16];
-        unsigned char edge_quad[4];
-    } BlockSig;
+    typedef struct {
+        int media;
+        int desvio_padrao;
+        int media_bordas;
+        int razao_bordas;
+        unsigned char textura[16];
+        unsigned char borda_quadrante[4];
+    } BlocoInfo;
 
-    // Copia imagem original para saída
     for (int y = 0; y < in.height; y++) {
         for (int x = 0; x < in.width; x++) {
             unsigned char lum =
-                (unsigned char)(
-                    0.59 * pin[y][x].g +
-                    0.30 * pin[y][x].r +
-                    0.11 * pin[y][x].b
-                );
+                (unsigned char)(0.59 * pin[y][x].g + 0.30 * pin[y][x].r + 0.11 * pin[y][x].b);
 
             pout[y][x].r = lum;
             pout[y][x].g = lum;
@@ -96,92 +91,69 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Matriz de luminância
-    unsigned char gray[in.height][in.width];
-
-    // Converte RGB para tons de cinza
+    unsigned char cinza[in.height][in.width];
     for (int y = 0; y < in.height; y++) {
         for (int x = 0; x < in.width; x++) {
-
             Pixel p = pin[y][x];
-
-            gray[y][x] =
-                (unsigned char)(
-                    0.59 * p.g +
-                    0.30 * p.r +
-                    0.11 * p.b
-                );
+            cinza[y][x] = (unsigned char)(0.59 * p.g + 0.30 * p.r + 0.11 * p.b);
         }
     }
 
-    unsigned char edges[in.height][in.width];
-
+    unsigned char bordas[in.height][in.width];
     for (int y = 1; y < in.height - 1; y++) {
         for (int x = 1; x < in.width - 1; x++) {
-
             int gx =
-                -gray[y-1][x-1] + gray[y-1][x+1]
-                -2*gray[y][x-1] + 2*gray[y][x+1]
-                -gray[y+1][x-1] + gray[y+1][x+1];
+                -cinza[y - 1][x - 1] + cinza[y - 1][x + 1]
+                -2 * cinza[y][x - 1] + 2 * cinza[y][x + 1]
+                -cinza[y + 1][x - 1] + cinza[y + 1][x + 1];
 
             int gy =
-                -gray[y-1][x-1] -2*gray[y-1][x] -gray[y-1][x+1]
-                +gray[y+1][x-1] +2*gray[y+1][x] +gray[y+1][x+1];
+                -cinza[y - 1][x - 1] - 2 * cinza[y - 1][x] - cinza[y - 1][x + 1]
+                +cinza[y + 1][x - 1] + 2 * cinza[y + 1][x] + cinza[y + 1][x + 1];
 
             int mag = abs(gx) + abs(gy);
 
             if (mag > 255)
                 mag = 255;
 
-            edges[y][x] = mag;
+            bordas[y][x] = mag;
         }
     }
 
     Pixel red = {255, 0, 0};
 
-    int grid_x = ((in.width - BLOCK) / STEP) + 1;
-    int grid_y = ((in.height - BLOCK) / STEP) + 1;
-    int total_blocks = grid_x * grid_y;
+    int grade_x = ((in.width - BLOCK) / STEP) + 1;
+    int grade_y = ((in.height - BLOCK) / STEP) + 1;
+    int total_blocos = grade_x * grade_y;
 
-    if (grid_x <= 0 || grid_y <= 0)
-    {
-        printf("Imagem muito pequena para analise\n");
-        free(in.pixels);
-        free(out.pixels);
-        exit(1);
-    }
+    BlocoInfo *assinaturas = (BlocoInfo *)malloc((size_t)total_blocos * sizeof(BlocoInfo));
+    unsigned char *validos = (unsigned char *)calloc((size_t)total_blocos, sizeof(unsigned char));
+    unsigned char *usados = (unsigned char *)calloc((size_t)total_blocos, sizeof(unsigned char));
+    int *melhor_par = (int *)malloc((size_t)total_blocos * sizeof(int));
+    int *melhor_pontuacao = (int *)malloc((size_t)total_blocos * sizeof(int));
 
-    BlockSig *sigs = (BlockSig *)malloc((size_t)total_blocks * sizeof(BlockSig));
-    unsigned char *valid = (unsigned char *)calloc((size_t)total_blocks, sizeof(unsigned char));
-    unsigned char *used = (unsigned char *)calloc((size_t)total_blocks, sizeof(unsigned char));
-    int *best_match = (int *)malloc((size_t)total_blocks * sizeof(int));
-    int *best_score = (int *)malloc((size_t)total_blocks * sizeof(int));
-
-    if (!sigs || !valid || !used || !best_match || !best_score)
+    if (!assinaturas || !validos || !usados || !melhor_par || !melhor_pontuacao)
     {
         printf("Erro de memoria\n");
-        free(sigs);
-        free(valid);
-        free(used);
-        free(best_match);
-        free(best_score);
+        free(assinaturas);
+        free(validos);
+        free(usados);
+        free(melhor_par);
+        free(melhor_pontuacao);
         free(in.pixels);
         free(out.pixels);
         exit(1);
     }
 
-    for (int i = 0; i < total_blocks; i++)
+    for (int i = 0; i < total_blocos; i++)
     {
-        best_match[i] = -1;
-        best_score[i] = 1000000;
+        melhor_par[i] = -1;
+        melhor_pontuacao[i] = 1000000;
     }
 
-    // Monta assinaturas dos blocos usando grayscale + textura + bordas
-    for (int gy = 0; gy < grid_y; gy++)
-    {
-        for (int gx = 0; gx < grid_x; gx++)
-        {
-            int idx = gy * grid_x + gx;
+    for (int gy = 0; gy < grade_y; gy++) {
+        for (int gx = 0; gx < grade_x; gx++) {
+            int idx = gy * grade_x + gx;
             int x = gx * STEP;
             int y = gy * STEP;
             long sum = 0;
@@ -190,235 +162,218 @@ int main(int argc, char *argv[])
             int edge_hits = 0;
             int quad_sum[4] = {0, 0, 0, 0};
 
-            for (int by = 0; by < BLOCK; by++)
-            {
-                for (int bx = 0; bx < BLOCK; bx++)
-                {
+            for (int by = 0; by < BLOCK; by++) {
+                for (int bx = 0; bx < BLOCK; bx++) {
                     int px = x + bx;
                     int py = y + by;
-                    int lum = gray[py][px];
-                    int edge_val = edges[py][px];
+                    int lum = cinza[py][px];
+                    int edge = bordas[py][px];
 
                     sum += lum;
                     sum_sq += lum * lum;
-                    edge_sum += edge_val;
-                    if (edge_val > 24)
+                    edge_sum += edge;
+                    if (edge > 24)
                     {
                         edge_hits++;
                     }
 
-                    quad_sum[(by >= BLOCK / 2) * 2 + (bx >= BLOCK / 2)] += edge_val;
+                    quad_sum[(by >= BLOCK / 2) * 2 + (bx >= BLOCK / 2)] += edge;
                 }
             }
 
             int area = BLOCK * BLOCK;
-            int mean = (int)(sum / area);
-            long variance = (sum_sq / area) - ((long)mean * (long)mean);
-            if (variance < 0)
+            int media = (int)(sum / area);
+            long variancia = (sum_sq / area) - ((long)media * (long)media);
+            if (variancia < 0)
             {
-                variance = 0;
+                variancia = 0;
             }
 
-            int stddev = 0;
-            while (((long)(stddev + 1) * (long)(stddev + 1)) <= variance)
+            int desvio_padrao = 0;
+            while (((long)(desvio_padrao + 1) * (long)(desvio_padrao + 1)) <= variancia)
             {
-                stddev++;
+                desvio_padrao++;
             }
 
-            sigs[idx].mean = mean;
-            sigs[idx].stddev = stddev;
-            sigs[idx].edge_mean = edge_sum / area;
-            sigs[idx].edge_ratio = (edge_hits * 100) / area;
+            assinaturas[idx].media = media;
+            assinaturas[idx].desvio_padrao = desvio_padrao;
+            assinaturas[idx].media_bordas = edge_sum / area;
+            assinaturas[idx].razao_bordas = (edge_hits * 100) / area;
 
-            for (int ty = 0; ty < 4; ty++)
-            {
-                for (int tx = 0; tx < 4; tx++)
-                {
-                    int cell_sum = 0;
-                    int cell_y0 = y + ty * (BLOCK / 4);
-                    int cell_x0 = x + tx * (BLOCK / 4);
+            for (int ty = 0; ty < 4; ty++) {
+                for (int tx = 0; tx < 4; tx++) {
+                    int soma_celula = 0;
+                    int y0 = y + ty * (BLOCK / 4);
+                    int x0 = x + tx * (BLOCK / 4);
 
-                    for (int cy = 0; cy < (BLOCK / 4); cy++)
-                    {
-                        for (int cx = 0; cx < (BLOCK / 4); cx++)
-                        {
-                            cell_sum += gray[cell_y0 + cy][cell_x0 + cx];
+                    for (int cy = 0; cy < (BLOCK / 4); cy++) {
+                        for (int cx = 0; cx < (BLOCK / 4); cx++) {
+                            soma_celula += cinza[y0 + cy][x0 + cx];
                         }
                     }
 
-                    int cell_mean = cell_sum / ((BLOCK / 4) * (BLOCK / 4));
-                    int normalized = cell_mean - mean + 128;
-                    if (normalized < 0)
+                    int media_celula = soma_celula / ((BLOCK / 4) * (BLOCK / 4));
+                    int normalizado = media_celula - media + 128;
+                    if (normalizado < 0)
                     {
-                        normalized = 0;
+                        normalizado = 0;
                     }
-                    if (normalized > 255)
+                    if (normalizado > 255)
                     {
-                        normalized = 255;
+                        normalizado = 255;
                     }
 
-                    sigs[idx].texture[ty * 4 + tx] = (unsigned char)normalized;
+                    assinaturas[idx].textura[ty * 4 + tx] = (unsigned char)normalizado;
                 }
             }
 
             for (int q = 0; q < 4; q++)
             {
-                int quad_value = quad_sum[q] / ((BLOCK / 2) * (BLOCK / 2));
-                if (quad_value > 255)
+                int valor_quadrante = quad_sum[q] / ((BLOCK / 2) * (BLOCK / 2));
+                if (valor_quadrante > 255)
                 {
-                    quad_value = 255;
+                    valor_quadrante = 255;
                 }
-                sigs[idx].edge_quad[q] = (unsigned char)quad_value;
+                assinaturas[idx].borda_quadrante[q] = (unsigned char)valor_quadrante;
             }
 
-            if (sigs[idx].stddev >= MIN_STDDEV && sigs[idx].edge_mean >= MIN_EDGE_MEAN && sigs[idx].edge_ratio >= MIN_EDGE_RATIO)
+            if (assinaturas[idx].desvio_padrao >= MIN_STDDEV && assinaturas[idx].media_bordas >= MIN_EDGE_MEAN && assinaturas[idx].razao_bordas >= MIN_EDGE_RATIO)
             {
-                valid[idx] = 1;
+                validos[idx] = 1;
             }
         }
     }
 
-    // Descobre o melhor parceiro de cada bloco válido
-    for (int i = 0; i < total_blocks; i++)
+    for (int i = 0; i < total_blocos; i++)
     {
-        if (!valid[i] || used[i])
+        if (!validos[i] || usados[i])
         {
             continue;
         }
 
-        int x1 = (i % grid_x) * STEP;
-        int y1 = (i / grid_x) * STEP;
+        int x1 = (i % grade_x) * STEP;
+        int y1 = (i / grade_x) * STEP;
 
-        for (int j = i + 1; j < total_blocks; j++)
+        for (int j = i + 1; j < total_blocos; j++)
         {
-            if (!valid[j] || used[j])
+            if (!validos[j] || usados[j])
             {
                 continue;
             }
 
-            int x2 = (j % grid_x) * STEP;
-            int y2 = (j / grid_x) * STEP;
+            int x2 = (j % grade_x) * STEP;
+            int y2 = (j / grade_x) * STEP;
             int dx = x1 - x2;
             int dy = y1 - y2;
 
-            // Ignora regiões muito próximas
             if ((dx * dx + dy * dy) < (MIN_DISTANCE * MIN_DISTANCE))
             {
                 continue;
             }
 
             int score = 0;
-            score += abs(sigs[i].mean - sigs[j].mean) * 2;
-            score += abs(sigs[i].stddev - sigs[j].stddev) * 3;
-            score += abs(sigs[i].edge_mean - sigs[j].edge_mean) * 2;
-            score += abs(sigs[i].edge_ratio - sigs[j].edge_ratio) * 4;
+            score += abs(assinaturas[i].media - assinaturas[j].media) * 2;
+            score += abs(assinaturas[i].desvio_padrao - assinaturas[j].desvio_padrao) * 3;
+            score += abs(assinaturas[i].media_bordas - assinaturas[j].media_bordas) * 2;
+            score += abs(assinaturas[i].razao_bordas - assinaturas[j].razao_bordas) * 4;
 
-            for (int k = 0; k < 16; k++)
+            for (int k=0; k<16; k++)
             {
-                score += abs((int)sigs[i].texture[k] - (int)sigs[j].texture[k]);
+                score += abs((int)assinaturas[i].textura[k] - (int)assinaturas[j].textura[k]);
             }
 
             for (int k = 0; k < 4; k++)
             {
-                score += abs((int)sigs[i].edge_quad[k] - (int)sigs[j].edge_quad[k]);
+                score += abs((int)assinaturas[i].borda_quadrante[k] - (int)assinaturas[j].borda_quadrante[k]);
             }
 
             score /= 8;
 
-            if (score < best_score[i])
+            if (score < melhor_pontuacao[i])
             {
-                best_score[i] = score;
-                best_match[i] = j;
+                melhor_pontuacao[i] = score;
+                melhor_par[i] = j;
             }
 
-            if (score < best_score[j])
+            if (score < melhor_pontuacao[j])
             {
-                best_score[j] = score;
-                best_match[j] = i;
+                melhor_pontuacao[j] = score;
+                melhor_par[j] = i;
             }
         }
     }
 
-    int matches = 0;
+    int pares = 0;
 
-    // Desenha apenas pares recíprocos e distintos
-    for (int i = 0; i < total_blocks && matches < MAX_MATCHES; i++)
+    for (int i = 0; i < total_blocos && pares < MAX_MATCHES; i++)
     {
-        if (!valid[i] || used[i])
+        if (!validos[i] || usados[i])
         {
             continue;
         }
 
-        int j = best_match[i];
-        if (j < 0 || j >= total_blocks)
+        int j = melhor_par[i];
+
+        if (melhor_pontuacao[i] >= MATCH_THRESHOLD || melhor_par[j] != i || melhor_pontuacao[j] >= MATCH_THRESHOLD)
         {
             continue;
         }
 
-        if (best_score[i] >= MATCH_THRESHOLD || best_match[j] != i || best_score[j] >= MATCH_THRESHOLD)
-        {
-            continue;
-        }
+        int coluna1 = i % grade_x;
+        int linha1 = i / grade_x;
+        int coluna2 = j % grade_x;
+        int linha2 = j / grade_x;
+        int deslocamento_x = coluna2 - coluna1;
+        int deslocamento_y = linha2 - linha1;
+        int apoio = 0;
 
-        int gx1 = i % grid_x;
-        int gy1 = i / grid_x;
-        int gx2 = j % grid_x;
-        int gy2 = j / grid_x;
-        int shift_x = gx2 - gx1;
-        int shift_y = gy2 - gy1;
-        int support = 0;
-
-        // Confirma se a vizinhanca ao redor do bloco também segue o mesmo deslocamento
-        for (int oy = -1; oy <= 1; oy++)
-        {
-            for (int ox = -1; ox <= 1; ox++)
-            {
-                if (ox == 0 && oy == 0)
+        for (int dy_viz = -1; dy_viz <= 1; dy_viz++) {
+            for (int dx_viz = -1; dx_viz <= 1; dx_viz++) {
+                if (dx_viz == 0 && dy_viz == 0)
                 {
                     continue;
                 }
 
-                int ngi = gx1 + ox;
-                int ngj = gx1 + ox + shift_x;
-                int ngyi = gy1 + oy;
-                int ngyj = gy1 + oy + shift_y;
+                int col_viz_i = coluna1 + dx_viz;
+                int col_viz_j = coluna1 + dx_viz + deslocamento_x;
+                int lin_viz_i = linha1 + dy_viz;
+                int lin_viz_j = linha1 + dy_viz + deslocamento_y;
 
-                if (ngi < 0 || ngi >= grid_x || ngyi < 0 || ngyi >= grid_y)
+                if (col_viz_i < 0 || col_viz_i >= grade_x || lin_viz_i < 0 || lin_viz_i >= grade_y)
                 {
                     continue;
                 }
 
-                if (ngj < 0 || ngj >= grid_x || ngyj < 0 || ngyj >= grid_y)
+                if (col_viz_j < 0 || col_viz_j >= grade_x || lin_viz_j < 0 || lin_viz_j >= grade_y)
                 {
                     continue;
                 }
 
-                int ni = ngyi * grid_x + ngi;
-                int nj = ngyj * grid_x + ngj;
+                int indice_i = lin_viz_i * grade_x + col_viz_i;
+                int indice_j = lin_viz_j * grade_x + col_viz_j;
 
-                if (!valid[ni] || !valid[nj])
+                if (!validos[indice_i] || !validos[indice_j])
                 {
                     continue;
                 }
 
-                if (best_match[ni] == nj && best_match[nj] == ni && best_score[ni] < MATCH_THRESHOLD && best_score[nj] < MATCH_THRESHOLD)
+                if (melhor_par[indice_i] == indice_j && melhor_par[indice_j] == indice_i && melhor_pontuacao[indice_i] < MATCH_THRESHOLD && melhor_pontuacao[indice_j] < MATCH_THRESHOLD)
                 {
-                    support++;
+                    apoio++;
                 }
             }
         }
 
-        if (support < 3)
+        if (apoio < 3)
         {
             continue;
         }
 
-        int x1 = (i % grid_x) * STEP;
-        int y1 = (i / grid_x) * STEP;
-        int x2 = (j % grid_x) * STEP;
-        int y2 = (j / grid_x) * STEP;
+        int x1 = (i % grade_x) * STEP;
+        int y1 = (i / grade_x) * STEP;
+        int x2 = (j % grade_x) * STEP;
+        int y2 = (j / grade_x) * STEP;
 
-        // Evita as linhas horizontais que ainda aparecem em faixas repetidas
         if (abs(y2 - y1) < STEP)
         {
             continue;
@@ -436,16 +391,16 @@ int main(int argc, char *argv[])
             2
         );
 
-        used[i] = 1;
-        used[j] = 1;
-        matches++;
+        usados[i] = 1;
+        usados[j] = 1;
+        pares++;
     }
 
-    free(sigs);
-    free(valid);
-    free(used);
-    free(best_match);
-    free(best_score);
+    free(assinaturas);
+    free(validos);
+    free(usados);
+    free(melhor_par);
+    free(melhor_pontuacao);
 
     // NÃO ALTERAR A PARTIR DAQUI!
 
