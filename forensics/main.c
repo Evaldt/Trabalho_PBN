@@ -153,37 +153,37 @@ int main(int argc, char *argv[])
 
     for (int gy = 0; gy < grade_y; gy++) {
         for (int gx = 0; gx < grade_x; gx++) {
-            int idx = gy * grade_x + gx;
+            int id = gy * grade_x + gx;
             int x = gx * STEP;
             int y = gy * STEP;
-            long sum = 0;
-            long sum_sq = 0;
-            int edge_sum = 0;
-            int edge_hits = 0;
-            int quad_sum[4] = {0, 0, 0, 0};
+            long soma = 0;
+            long soma2 = 0;
+            int soma_borda = 0;
+            int bordas_fortes = 0;
+            int quad[4] = {0, 0, 0, 0};
 
             for (int by = 0; by < BLOCK; by++) {
                 for (int bx = 0; bx < BLOCK; bx++) {
-                    int px = x + bx;
-                    int py = y + by;
-                    int lum = cinza[py][px];
-                    int edge = bordas[py][px];
+                    int xx = x + bx;
+                    int yy = y + by;
+                    int v = cinza[yy][xx];
+                    int borda = bordas[yy][xx];
 
-                    sum += lum;
-                    sum_sq += lum * lum;
-                    edge_sum += edge;
-                    if (edge > 24)
+                    soma += v;
+                    soma2 += v * v;
+                    soma_borda += borda;
+                    if (borda > 24)
                     {
-                        edge_hits++;
+                        bordas_fortes++;
                     }
 
-                    quad_sum[(by >= BLOCK / 2) * 2 + (bx >= BLOCK / 2)] += edge;
+                    quad[(by >= BLOCK / 2) * 2 + (bx >= BLOCK / 2)] += borda;
                 }
             }
 
             int area = BLOCK * BLOCK;
-            int media = (int)(sum / area);
-            long variancia = (sum_sq / area) - ((long)media * (long)media);
+            int media = (int)(soma / area);
+            long variancia = (soma2 / area) - ((long)media * (long)media);
             if (variancia < 0)
             {
                 variancia = 0;
@@ -195,10 +195,10 @@ int main(int argc, char *argv[])
                 desvio_padrao++;
             }
 
-            assinaturas[idx].media = media;
-            assinaturas[idx].desvio_padrao = desvio_padrao;
-            assinaturas[idx].media_bordas = edge_sum / area;
-            assinaturas[idx].razao_bordas = (edge_hits * 100) / area;
+            assinaturas[id].media = media;
+            assinaturas[id].desvio_padrao = desvio_padrao;
+            assinaturas[id].media_bordas = soma_borda / area;
+            assinaturas[id].razao_bordas = (bordas_fortes * 100) / area;
 
             for (int ty = 0; ty < 4; ty++) {
                 for (int tx = 0; tx < 4; tx++) {
@@ -223,23 +223,23 @@ int main(int argc, char *argv[])
                         normalizado = 255;
                     }
 
-                    assinaturas[idx].textura[ty * 4 + tx] = (unsigned char)normalizado;
+                    assinaturas[id].textura[ty * 4 + tx] = (unsigned char)normalizado;
                 }
             }
 
             for (int q = 0; q < 4; q++)
             {
-                int valor_quadrante = quad_sum[q] / ((BLOCK / 2) * (BLOCK / 2));
+                int valor_quadrante = quad[q] / ((BLOCK / 2) * (BLOCK / 2));
                 if (valor_quadrante > 255)
                 {
                     valor_quadrante = 255;
                 }
-                assinaturas[idx].borda_quadrante[q] = (unsigned char)valor_quadrante;
+                assinaturas[id].borda_quadrante[q] = (unsigned char)valor_quadrante;
             }
 
-            if (assinaturas[idx].desvio_padrao >= MIN_STDDEV && assinaturas[idx].media_bordas >= MIN_EDGE_MEAN && assinaturas[idx].razao_bordas >= MIN_EDGE_RATIO)
+            if (assinaturas[id].desvio_padrao >= MIN_STDDEV && assinaturas[id].media_bordas >= MIN_EDGE_MEAN && assinaturas[id].razao_bordas >= MIN_EDGE_RATIO)
             {
-                validos[idx] = 1;
+                validos[id] = 1;
             }
         }
     }
